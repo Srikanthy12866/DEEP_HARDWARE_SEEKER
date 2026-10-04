@@ -1,0 +1,9 @@
+{
+  "name": "@fieldnote/sop-hardware",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "expo": {
+    "modules": ["SopHardware"]
+  }
+}
