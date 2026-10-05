@@ -8,6 +8,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^13.5.0",
+    "node-os-utils": "^3.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-scripts": "5.0.1",
@@ -58,16 +59,23 @@
       "package.json"
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }

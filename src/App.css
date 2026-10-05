@@ -126,3 +126,7 @@ h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 42px; font-weigh
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+.soc-card-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 18px; }
+.soc-card { background: linear-gradient(180deg, #f9faf5 0%, #eef2e6 100%); border: 1px solid var(--line); border-radius: 8px; min-height: 88px; padding: 14px 16px; }
+.soc-card-label { color: #6e7d72; display: block; font: 700 9px 'Arial Narrow', 'Trebuchet MS', sans-serif; letter-spacing: 1.2px; margin-bottom: 10px; text-transform: uppercase; }
+.soc-card strong { color: #21372b; display: block; font: 600 18px/1.2 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }

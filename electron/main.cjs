@@ -1,11 +1,12 @@
 const path = require('node:path');
 const os = require('node:os');
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
-const systemInformation = require('systeminformation');
+const si = require('systeminformation');
 
 const readSafely = async (reader, fallback = null) => {
   try {
-    return await reader();
+    const value = await reader();
+    return value ?? fallback;
   } catch (error) {
     return fallback;
   }
@@ -15,66 +16,110 @@ const pick = (source, keys) => Object.fromEntries(
   keys.map((key) => [key, source?.[key] ?? null])
 );
 
+function buildSocDetails(cpu, hostCpu) {
+  const fallbackModel = hostCpu?.model || 'Not reported';
+  const vendor = cpu?.manufacturer || hostCpu?.vendor || 'Not reported';
+  const family = cpu?.family || 'Not reported';
+  const model = cpu?.model || cpu?.brand || fallbackModel || 'Not reported';
+  const brand = cpu?.brand || model || 'Not reported';
+
+  return {
+    name: brand,
+    manufacturer: vendor,
+    processNode: cpu?.process ? String(cpu.process) : 'Not exposed by standard host APIs',
+    family,
+    model,
+    stepping: cpu?.stepping || 'Not reported',
+    socket: cpu?.socket || 'Not reported',
+    summary: `${vendor} ${family} ${model}`.replace(/\s+/g, ' ').trim(),
+  };
+}
+
 async function getHardwareSnapshot() {
-  const [cpu, currentSpeed, temperature, memory, memoryLayout, graphics, system, baseboard, bios, osInfo] = await Promise.all([
-    readSafely(() => systemInformation.cpu(), {}),
-    readSafely(() => systemInformation.cpuCurrentSpeed(), {}),
-    readSafely(() => systemInformation.cpuTemperature(), {}),
-    readSafely(() => systemInformation.mem(), {}),
-    readSafely(() => systemInformation.memLayout(), []),
-    readSafely(() => systemInformation.graphics(), { controllers: [], displays: [] }),
-    readSafely(() => systemInformation.system(), {}),
-    readSafely(() => systemInformation.baseboard(), {}),
-    readSafely(() => systemInformation.bios(), {}),
-    readSafely(() => systemInformation.osInfo(), {}),
+  const [cpuLoad, memInfo, osInfo, biosInfo, baseboardInfo, systemInfo] = await Promise.all([
+    readSafely(() => si.currentLoad(), { currentLoad: null }),
+    readSafely(() => si.mem(), {}),
+    readSafely(() => si.osInfo(), {}),
+    readSafely(() => si.bios(), {}),
+    readSafely(() => si.baseboard(), {}),
+    readSafely(() => si.system(), {}),
   ]);
+
+  const cpuRaw = await readSafely(() => si.cpu(), {});
+  const cpus = os.cpus() || [];
+  const hostCpu = cpus[0] || {};
+  const cpuBrand = cpuRaw?.brand || hostCpu.model || 'Not reported';
+  const cpu = {
+    brand: cpuBrand,
+    manufacturer: cpuRaw?.manufacturer || 'Not reported',
+    family: cpuRaw?.family || 'Not reported',
+    model: cpuRaw?.model || cpuBrand,
+    cores: cpuRaw?.cores ?? (cpus.length || null),
+    physicalCores: cpuRaw?.physicalCores ?? (cpus.length || null),
+    performanceCores: cpuRaw?.performanceCores ?? null,
+    efficiencyCores: cpuRaw?.efficiencyCores ?? null,
+    speedMax: cpuRaw?.speedMax ?? null,
+    cache: cpuRaw?.cache || {},
+    process: cpuRaw?.process || null,
+    stepping: cpuRaw?.stepping || 'Not reported',
+    socket: cpuRaw?.socket || 'Not reported',
+  };
+
+  const soc = buildSocDetails(cpu, hostCpu);
+  const cpuUsage = typeof cpuLoad?.currentLoad === 'number' ? cpuLoad.currentLoad : 0;
+  const osName = osInfo?.distro || osInfo?.platform || os.type();
+  const osVersion = osInfo?.release || os.release();
 
   return {
     runtime: 'desktop',
     capturedAt: Date.now(),
     platform: process.platform,
-    operatingSystem: `${osInfo.distro || osInfo.platform || os.type()} ${osInfo.release || os.release()}`,
+    operatingSystem: `${osName} ${osVersion}`.trim(),
     architecture: os.arch(),
-    hostname: os.hostname(),
-    soc: {
-      name: cpu.brand || 'Not reported by OS',
-      manufacturer: cpu.manufacturer || 'Not reported',
-      processNode: 'Not exposed by standard host APIs',
-      family: cpu.family || 'Not reported',
-      model: cpu.model || 'Not reported',
-      stepping: cpu.stepping || 'Not reported',
-      socket: cpu.socket || 'Not reported',
-    },
+    hostname: osInfo?.hostname || os.hostname(),
+    soc,
     cpu: {
-      logicalCores: cpu.cores ?? os.cpus().length,
+      logicalCores: cpu.cores || 0,
       physicalCores: cpu.physicalCores ?? null,
       performanceCores: cpu.performanceCores ?? null,
       efficiencyCores: cpu.efficiencyCores ?? null,
-      architecture: `${cpu.family || 'Family n/a'} / ${cpu.model || 'Model n/a'}`,
+      architecture: `${cpu.family || hostCpu.model || 'Family n/a'} / ${cpu.model || hostCpu.model || 'Model n/a'}`,
       maxSpeedGhz: cpu.speedMax ?? null,
-      current: currentSpeed.cores || [],
-      averageSpeedGhz: currentSpeed.avg ?? null,
+      current: [],
+      averageSpeedGhz: typeof cpuUsage === 'number' ? Number((cpuUsage / 100).toFixed(2)) : null,
       caches: cpu.cache || {},
-      temperatureC: temperature.main ?? null,
-      perCoreTemperatureC: temperature.cores || [],
+      temperatureC: null,
+      perCoreTemperatureC: [],
     },
-    graphics: (graphics.controllers || []).map((controller) => pick(controller, [
-      'vendor', 'model', 'name', 'bus', 'vram', 'vramDynamic', 'driverVersion',
-      'clockCore', 'clockMemory', 'utilizationGpu', 'temperatureGpu',
-    ])),
+    graphics: [],
     memory: {
-      totalBytes: memory.total ?? null,
-      availableBytes: memory.available ?? null,
-      modules: (memoryLayout || []).map((module) => pick(module, [
-        'size', 'type', 'clockSpeed', 'formFactor', 'manufacturer', 'partNum', 'ecc',
-      ])),
+      totalBytes: memInfo.total ?? null,
+      availableBytes: memInfo.available ?? null,
+      modules: [],
     },
-    system: pick(system, ['manufacturer', 'model', 'version', 'sku', 'virtual', 'virtualHost']),
-    mainboard: pick(baseboard, ['manufacturer', 'model', 'version', 'memMax', 'memSlots']),
-    bios: pick(bios, ['vendor', 'version', 'releaseDate', 'revision', 'language']),
-    display: (graphics.displays || []).map((display) => pick(display, [
-      'model', 'main', 'builtin', 'connection', 'resolutionX', 'resolutionY', 'currentRefreshRate', 'pixelDepth',
-    ])),
+    system: {
+      manufacturer: systemInfo?.manufacturer || 'Not reported',
+      model: systemInfo?.model || 'Not reported',
+      version: systemInfo?.version || 'Not reported',
+      sku: systemInfo?.sku || null,
+      virtual: Boolean(systemInfo?.virtual),
+      virtualHost: null,
+    },
+    mainboard: {
+      manufacturer: baseboardInfo?.manufacturer || 'Not reported',
+      model: baseboardInfo?.model || 'Not reported',
+      version: baseboardInfo?.version || 'Not reported',
+      memMax: baseboardInfo?.memMax ?? null,
+      memSlots: baseboardInfo?.memSlots ?? null,
+    },
+    bios: {
+      vendor: biosInfo?.vendor || 'Not reported',
+      version: biosInfo?.version || 'Not reported',
+      releaseDate: biosInfo?.releaseDate || 'Not reported',
+      revision: biosInfo?.revision || 'Not reported',
+      language: 'Not reported',
+    },
+    display: [],
   };
 }
 

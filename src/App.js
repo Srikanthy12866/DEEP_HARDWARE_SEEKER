@@ -66,7 +66,7 @@ const readHardware = async () => {
     updatedAt: new Date(),
     browser,
     operatingSystem: nav.userAgentData?.platform || nav.platform || 'Not exposed',
-    browserVersion: userAgent.match(/(?:Chrome|Firefox|Edg|Version)\/[\d.]+/)?.[0]?.split('/')[1] || 'Not exposed',
+    browserVersion: userAgent.match(/(?:Chrome|Firefox|Edg|Version)\/[^\s]+/)?.[0]?.split('/')[1] || 'Not exposed',
     cpuThreads: nav.hardwareConcurrency ? `${nav.hardwareConcurrency} logical processors` : 'Not exposed',
     memory: nav.deviceMemory ? `About ${nav.deviceMemory} GB` : 'Not exposed',
     graphics,
@@ -118,8 +118,14 @@ function Icon({ name, size = 18 }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
+const displayValue = (value, fallback = 'Not reported') => {
+  if (value === null || value === undefined || value === '') return fallback;
+  return value;
+};
+
 function DataRow({ label, value, mono = false }) {
-  return <div className="data-row"><span>{label}</span><strong className={mono ? 'mono' : ''}>{value || 'Not reported'}</strong></div>;
+  const renderedValue = displayValue(value, 'Not reported');
+  return <div className="data-row"><span>{label}</span><strong className={mono ? 'mono' : ''}>{renderedValue}</strong></div>;
 }
 
 function DataPanel({ title, icon, children, className = '' }) {
@@ -187,6 +193,22 @@ function App() {
 
   const visible = activeSection;
 
+  const cpuName = hardware?.soc?.name || hardware?.cpu?.name || 'Processor not reported';
+  const socName = hardware?.soc?.summary || hardware?.soc?.name || cpuName;
+  const socManufacturer = displayValue(hardware?.soc?.manufacturer);
+  const socFamily = displayValue(hardware?.soc?.family);
+  const socModel = displayValue(hardware?.soc?.model);
+  const socProcess = displayValue(hardware?.soc?.processNode);
+
+  const safeCpuDetails = hardware ? {
+    cpuName,
+    socName,
+    socManufacturer,
+    socFamily,
+    socModel,
+    socProcess,
+  } : null;
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -222,14 +244,14 @@ function App() {
                 <div className="metric"><span className="metric-label">GRAPHICS ADAPTERS</span><strong className="metric-online">{hardware.graphics.length}</strong><span className="metric-foot">DETECTED CONTROLLERS</span><span className="metric-glyph">04</span></div>
               </div>}
               <div className="panel-grid">
-                <DataPanel title="Processor & live clocks" icon="chip"><DataRow label="SoC / CPU" value={hardware.soc.name} /><DataRow label="Vendor" value={hardware.soc.manufacturer} /><DataRow label="Family / model" value={`${hardware.soc.family} / ${hardware.soc.model}`} /><DataRow label="Architecture" value={hardware.cpu.architecture} /><DataRow label="Max rated frequency" value={hardware.cpu.maxSpeedGhz ? `${hardware.cpu.maxSpeedGhz} GHz` : 'Not reported'} /><DataRow label="Current per-core frequency" value={hardware.cpu.current.length ? hardware.cpu.current.map((speed, index) => `C${index} ${speed} GHz`).join(' · ') : 'Per-core readings unavailable'} /><DataRow label="Hybrid core counts" value={`${hardware.cpu.performanceCores ?? 'N/A'} performance · ${hardware.cpu.efficiencyCores ?? 'N/A'} efficiency`} /></DataPanel>
+                <DataPanel title="Processor & live clocks" icon="chip"><DataRow label="SoC / CPU" value={safeCpuDetails?.socName || safeCpuDetails?.cpuName || 'Not reported'} /><DataRow label="Vendor" value={safeCpuDetails?.socManufacturer || 'Not reported'} /><DataRow label="Family / model" value={`${safeCpuDetails?.socFamily || 'Not reported'} / ${safeCpuDetails?.socModel || 'Not reported'}`} /><DataRow label="Architecture" value={hardware.cpu.architecture} /><DataRow label="Process node" value={safeCpuDetails?.socProcess || 'Not reported'} /><DataRow label="Max rated frequency" value={hardware.cpu.maxSpeedGhz ? `${hardware.cpu.maxSpeedGhz} GHz` : 'Not reported'} /><DataRow label="Current per-core frequency" value={hardware.cpu.current.length ? hardware.cpu.current.map((speed, index) => `C${index} ${speed} GHz`).join(' · ') : 'Per-core readings unavailable'} /><DataRow label="Hybrid core counts" value={`${hardware.cpu.performanceCores ?? 'N/A'} performance · ${hardware.cpu.efficiencyCores ?? 'N/A'} efficiency`} /></DataPanel>
                 <DataPanel title="GPU & caches" icon="display">{hardware.graphics.length ? hardware.graphics.map((gpu, index) => <div key={`${gpu.model}-${index}`}><DataRow label={`GPU ${index + 1}`} value={`${gpu.vendor || ''} ${gpu.model || gpu.name || 'Unknown model'}`} /><DataRow label="VRAM" value={gpu.vram ? `${gpu.vram} MB` : 'Shared / unavailable'} /><DataRow label="GPU clock" value={gpu.clockCore ? `${gpu.clockCore} MHz` : 'Driver does not report'} /></div>) : <DataRow label="Graphics" value="No controller details reported" />}<DataRow label="L1 data / instruction" value={`${formatBytes(hardware.cpu.caches.l1d)} / ${formatBytes(hardware.cpu.caches.l1i)}`} /><DataRow label="L2 cache" value={formatBytes(hardware.cpu.caches.l2)} /><DataRow label="L3 cache" value={formatBytes(hardware.cpu.caches.l3)} /><DataRow label="CPU temperature" value={hardware.cpu.temperatureC != null ? `${hardware.cpu.temperatureC} °C` : 'Sensor unavailable'} /></DataPanel>
               </div>
             </>}
 
             {hardware.runtime === 'desktop' && (visible === 'overview' || visible === 'memory') && <DataPanel title="Memory modules" icon="chip"><DataRow label="Total physical memory" value={formatBytes(hardware.memory.totalBytes)} /><DataRow label="Available to OS" value={formatBytes(hardware.memory.availableBytes)} />{hardware.memory.modules.length ? hardware.memory.modules.map((module, index) => <div key={`${module.bank || module.partNum}-${index}`}><DataRow label={`Module ${index + 1}`} value={`${formatBytes(module.size)} ${module.type || 'memory'}`} /><DataRow label="Speed / form factor" value={`${module.clockSpeed || 'N/A'} MHz · ${module.formFactor || 'N/A'}`} /><DataRow label="Manufacturer / part" value={`${module.manufacturer || 'N/A'} · ${module.partNum || 'N/A'}`} mono /></div>) : <DataRow label="Module layout" value="Not exposed by this OS or permission level" />}</DataPanel>}
 
-            {hardware.runtime === 'desktop' && (visible === 'overview' || visible === 'board') && <div className="panel-grid"><DataPanel title="System & mainboard" icon="display"><DataRow label="System manufacturer" value={hardware.system.manufacturer} /><DataRow label="System model" value={hardware.system.model} /><DataRow label="Mainboard manufacturer" value={hardware.mainboard.manufacturer} /><DataRow label="Mainboard model" value={hardware.mainboard.model} /><DataRow label="Board version" value={hardware.mainboard.version} /><DataRow label="Virtual machine" value={hardware.system.virtual ? `Yes · ${hardware.system.virtualHost || 'host unknown'}` : 'No / unknown'} /></DataPanel><DataPanel title="BIOS / firmware" icon="chip"><DataRow label="Vendor" value={hardware.bios.vendor} /><DataRow label="Version" value={hardware.bios.version} /><DataRow label="Release date" value={hardware.bios.releaseDate} /><DataRow label="Revision" value={hardware.bios.revision} /><DataRow label="SoC process node" value={hardware.soc.processNode} /></DataPanel></div>}
+            {hardware.runtime === 'desktop' && (visible === 'overview' || visible === 'board') && <div className="panel-grid"><DataPanel title="System & mainboard" icon="display"><DataRow label="System manufacturer" value={hardware.system.manufacturer} /><DataRow label="System model" value={hardware.system.model} /><DataRow label="Mainboard manufacturer" value={hardware.mainboard.manufacturer} /><DataRow label="Mainboard model" value={hardware.mainboard.model} /><DataRow label="Board version" value={hardware.mainboard.version} /><DataRow label="Virtual machine" value={hardware.system.virtual ? `Yes · ${hardware.system.virtualHost || 'host unknown'}` : 'No / unknown'} /></DataPanel><DataPanel title="BIOS / firmware" icon="chip"><DataRow label="Vendor" value={hardware.bios.vendor} /><DataRow label="Version" value={hardware.bios.version} /><DataRow label="Release date" value={hardware.bios.releaseDate} /><DataRow label="Revision" value={hardware.bios.revision} /><DataRow label="SoC process node" value={safeCpuDetails?.socProcess || 'Not reported'} /></DataPanel></div>}
 
             {hardware.runtime !== 'desktop' && (visible === 'overview' || visible === 'display') && <div className="panel-grid">
               <DataPanel title="Display & viewport" icon="display"><DataRow label="Screen resolution" value={hardware.screen} /><DataRow label="Available area" value={hardware.availableScreen} /><DataRow label="Browser viewport" value={hardware.viewport} /><DataRow label="Pixel density" value={hardware.pixelRatio} /><DataRow label="Color depth" value={hardware.colorDepth} /><DataRow label="Orientation" value={hardware.orientation} /></DataPanel>
