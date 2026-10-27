@@ -118,4 +118,7 @@ For desktop changes, the collector-to-UI contract is the object returned by `get
 - Android TV: the Android project may be a starting point, but remote navigation, TV layout, installation policy and hardware reads need device testing.
 - Android Automotive, proprietary car systems, iOS/iPadOS and other embedded TV platforms: not currently certified or implemented as target-specific applications. They need platform-approved packaging, APIs and validation.
 
-Do not describe the app as running on "any OS" until that OS has a build target, collector implementation, and hardware validation.
+
+```
+Reminder for me: Not to describe the app as running on "any OS" until that OS has a build target, collector implementation, and hardware validation.
+```
